@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  /* ─── Typography ─────────────────────────────────────── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* ─── Primary — Discord Blurple ──────────────────────── */
+  --color-primary-50:  #eef0fd;
+  --color-primary-100: #dde1fb;
+  --color-primary-200: #bac3f7;
+  --color-primary-300: #98a5f3;
+  --color-primary-400: #7587ef;
+  --color-primary-500: #5865f2;
+  --color-primary-600: #4752c4;
+  --color-primary-700: #3640a0;
+  --color-primary-800: #252d7c;
+  --color-primary-900: #141b58;
+
+  /* ─── Surface — dark panel backgrounds ───────────────── */
+  --color-surface-50:  #f0f1f5;
+  --color-surface-100: #e0e2eb;
+  --color-surface-200: #c1c5d6;
+  --color-surface-300: #a2a8c2;
+  --color-surface-400: #838bad;
+  --color-surface-500: #646e99;
+  --color-surface-600: #3e4464;
+  --color-surface-700: #2b2f45;
+  --color-surface-800: #1e2029;
+  --color-surface-900: #161720;
+  --color-surface-950: #0f1117;
+
+  /* ─── Success — Discord green ─────────────────────────── */
+  --color-success-300: #6ee7a0;
+  --color-success-400: #4ade80;
+  --color-success-500: #3ba55c;
+  --color-success-600: #2d7d46;
+
+  /* ─── Danger — rose/red ──────────────────────────────── */
+  --color-danger-300:  #fca5a5;
+  --color-danger-400:  #f87171;
+  --color-danger-500:  #ef4444;
+  --color-danger-600:  #dc2626;
+
+  /* ─── Warning — amber ────────────────────────────────── */
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+}
+
+/* ─── Base styles ─────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-950);
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Custom scrollbar ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-700);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-600);
+}
