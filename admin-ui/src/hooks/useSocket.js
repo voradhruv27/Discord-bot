@@ -32,9 +32,7 @@ export default function useSocket(onMessageReceived) {
         if (isUnmounted) return;
         try {
           const data = JSON.parse(event.data);
-          if (data.type === "new_message") {
-            callbackRef.current?.(data.payload);
-          }
+          callbackRef.current?.(data);
         } catch (err) {
           console.error("Failed to parse WebSocket message:", err);
         }

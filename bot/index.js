@@ -5,6 +5,9 @@ const { startBotHttpServer } = require("./src/server/botHttpServer");
 // Import events
 const readyEvent = require("./src/events/ready");
 const messageCreateEvent = require("./src/events/messageCreate");
+const interactionCreateEvent = require("./src/events/interactionCreate");
+const channelDeleteEvent = require("./src/events/channelDelete");
+const messageDeleteEvent = require("./src/events/messageDelete");
 
 // Initialize Client
 const client = new Client({
@@ -26,6 +29,9 @@ const registerEvent = (event) => {
 
 registerEvent(readyEvent);
 registerEvent(messageCreateEvent);
+registerEvent(interactionCreateEvent);
+registerEvent(channelDeleteEvent);
+registerEvent(messageDeleteEvent);
 
 // Start internal HTTP Server
 startBotHttpServer(client);

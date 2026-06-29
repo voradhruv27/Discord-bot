@@ -17,7 +17,6 @@ export default defineConfig({
       '/socket': {
         target: 'ws://localhost:5001',
         ws: true,
-        rewrite: (path) => path.replace(/^\/socket/, ''),
       },
     },
   },
