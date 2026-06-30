@@ -1,7 +1,7 @@
 // Basic controller for Admin operations.
 
 const axios = require("axios");
-const { getAllChats, getMessages, deleteChat, deleteMessage } = require("../services/chatStore");
+const { getAllChats, getMessages, deleteChat, deleteMessage, setChatStatus } = require("../services/chatStore");
 
 const getAdminStats = (req, res) => {
   res.json({
@@ -87,6 +87,29 @@ const notifyMessageDeleted = (req, res) => {
   res.json({ status: "success" });
 };
 
+// Handles notification from Bot that a chat was closed (ticket closed)
+const closeChatByChannel = (req, res) => {
+  const { channelId } = req.params;
+
+  // Find channel name by channelId from the stored messages
+  const allChatNames = getAllChats();
+  const channelName = allChatNames.find((name) => {
+    const msgs = getMessages(name);
+    return msgs.some((msg) => msg.channelId === channelId);
+  });
+
+  if (channelName) {
+    setChatStatus(channelName, "closed");
+  }
+
+  broadcast({
+    type: "chat_closed",
+    payload: { channelId, channelName: channelName || null },
+  });
+
+  res.json({ status: "success" });
+};
+
 module.exports = {
   getAdminStats,
   getChats,
@@ -94,4 +117,5 @@ module.exports = {
   notifyChannelCreated,
   notifyChannelDeleted,
   notifyMessageDeleted,
+  closeChatByChannel,
 };

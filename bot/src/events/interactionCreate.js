@@ -1,4 +1,7 @@
+const { PermissionFlagsBits } = require("discord.js");
 const newChatCommand = require("../commands/newChat");
+const { createChat } = require("../services/chatService");
+const { notifyChatClosedToBackend } = require("../services/backendService");
 
 // Store commands in a Map for easy lookup by name
 const commands = new Map();
@@ -6,33 +9,81 @@ commands.set(newChatCommand.data.name, newChatCommand);
 
 module.exports = {
   name: "interactionCreate",
-  once: false, // listen for EVERY interaction, not just the first one
+  once: false,
 
   async execute(interaction) {
-    // Only handle slash commands, ignore buttons/menus/etc.
-    if (!interaction.isChatInputCommand()) return;
+    // --- SLASH COMMANDS ---
+    if (interaction.isChatInputCommand()) {
+      const command = commands.get(interaction.commandName);
+      if (!command) {
+        console.warn(`Unknown command: ${interaction.commandName}`);
+        return;
+      }
 
-    // Find the matching command handler by name
-    const command = commands.get(interaction.commandName);
-
-    // If no handler found, ignore it
-    if (!command) {
-      console.warn(`Unknown command: ${interaction.commandName}`);
+      try {
+        await command.execute(interaction);
+      } catch (err) {
+        console.error(`Error executing /${interaction.commandName}:`, err);
+        const reply = { content: "Something went wrong!", flags: 64 };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(reply);
+        } else {
+          await interaction.reply(reply);
+        }
+      }
       return;
     }
 
-    // Run the command handler
-    try {
-      await command.execute(interaction);
-    } catch (err) {
-      console.error(`Error executing /${interaction.commandName}:`, err);
-      // If we haven't replied yet, send an error message
-      const reply = { content: "Something went wrong!", flags: 64 };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(reply);
-      } else {
-        await interaction.reply(reply);
+    // --- BUTTON CLICKS ---
+    if (interaction.isButton()) {
+      const { customId } = interaction;
+
+      // "Start Chat" button on the admin-posted embed
+      if (customId === "start-chat") {
+        try {
+          await interaction.deferReply({ flags: 64 }); // ephemeral, gives us time
+          const channel = await createChat(interaction.guild, interaction.user);
+          await interaction.editReply({
+            content: `Your chat has been created: ${channel}`,
+          });
+        } catch (err) {
+          console.error("Error handling start-chat button:", err);
+          await interaction.editReply({
+            content: "Failed to create chat. Please try again.",
+          });
+        }
+        return;
+      }
+
+      // "Close Ticket" button inside a chat channel
+      if (customId === "close-ticket") {
+        try {
+          await interaction.deferReply(); // visible to everyone in the channel
+
+          const channel = interaction.channel;
+
+          // Set the user's permissions to read-only (deny SendMessages, allow ViewChannel + ReadMessageHistory)
+          await channel.permissionOverwrites.edit(interaction.user.id, {
+            [PermissionFlagsBits.SendMessages]: false,
+            [PermissionFlagsBits.ViewChannel]: true,
+            [PermissionFlagsBits.ReadMessageHistory]: true,
+          });
+
+          // Notify the backend so admin panel can show "closed" status
+          await notifyChatClosedToBackend(channel.id);
+
+          await interaction.editReply({
+            content: `This ticket has been closed by ${interaction.user.username}. The channel is now read-only.`,
+          });
+        } catch (err) {
+          console.error("Error handling close-ticket button:", err);
+          await interaction.editReply({
+            content: "Failed to close ticket. Please try again.",
+          });
+        }
+        return;
       }
     }
   },
 };
+

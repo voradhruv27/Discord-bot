@@ -41,10 +41,23 @@ const deleteMessage = (channelName, messageId) => {
     }
 };
 
+// --- Chat status tracking (open / closed) ---
+const chatStatus = {};
+
+const setChatStatus = (channelName, status) => {
+    chatStatus[channelName] = status;
+};
+
+const getChatStatus = (channelName) => {
+    return chatStatus[channelName] || "open";
+};
+
 module.exports = {
     addMessage,
     getMessages,
     getAllChats,
     deleteChat,
     deleteMessage,
+    setChatStatus,
+    getChatStatus,
 };

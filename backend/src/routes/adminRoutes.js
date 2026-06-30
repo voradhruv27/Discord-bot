@@ -7,6 +7,7 @@ const {
   notifyChannelCreated,
   notifyChannelDeleted,
   notifyMessageDeleted,
+  closeChatByChannel,
 } = require("../controllers/adminController");
 
 router.get("/status", getAdminStats);
@@ -15,5 +16,6 @@ router.get("/chats/:channelName/messages", getChatMessages);
 router.post("/channels/created", notifyChannelCreated);
 router.post("/channels/deleted", notifyChannelDeleted);
 router.post("/messages/deleted", notifyMessageDeleted);
+router.patch("/chats/:channelId/close", closeChatByChannel);
 
 module.exports = router;

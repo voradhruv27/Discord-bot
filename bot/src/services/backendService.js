@@ -53,9 +53,18 @@ const notifyMessageDeletedToBackend = async (channelName, messageId) => {
   }
 };
 
+const notifyChatClosedToBackend = async (channelId) => {
+  try {
+    await axios.patch(`${process.env.BACKEND_URL}/api/admin/chats/${channelId}/close`);
+  } catch (err) {
+    console.error("Failed to notify backend of chat closure:", err.message);
+  }
+};
+
 module.exports = {
   forwardMessageToBackend,
   notifyChannelCreatedToBackend,
   notifyChannelDeletedToBackend,
   notifyMessageDeletedToBackend,
+  notifyChatClosedToBackend,
 };
