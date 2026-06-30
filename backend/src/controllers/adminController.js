@@ -1,7 +1,7 @@
 // Basic controller for Admin operations.
 
 const axios = require("axios");
-const { getAllChats, getMessages, deleteChat, deleteMessage, setChatStatus } = require("../services/chatStore");
+const { getAllChats, getMessages, deleteChat, deleteMessage, setChatStatus, getChatStatus } = require("../services/chatStore");
 
 const getAdminStats = (req, res) => {
   res.json({
@@ -17,13 +17,18 @@ const getChats = async (req, res) => {
     const botUrl = process.env.BOT_SERVER_URL || "http://localhost:3001";
     const response = await axios.get(`${botUrl}/active-chats`);
     const botChats = response.data.chats || [];
-    res.json({ chats: botChats });
+    const chatsWithStatus = botChats.map((chat) => ({
+      ...chat,
+      status: getChatStatus(chat.name),
+    }));
+    res.json({ chats: chatsWithStatus });
   } catch (err) {
     console.error("Failed to fetch active chats from bot:", err.message);
     // Fallback to locally stored chats in-memory if bot is offline
     const chats = getAllChats().map((name) => ({
       name,
       id: getMessages(name)[0]?.channelId || null,
+      status: getChatStatus(name),
     }));
     res.json({ chats });
   }
