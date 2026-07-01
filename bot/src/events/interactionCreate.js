@@ -62,8 +62,8 @@ module.exports = {
 
           const channel = interaction.channel;
 
-          // Set the user's permissions to read-only (deny SendMessages, allow ViewChannel + ReadMessageHistory)
-          await channel.permissionOverwrites.edit(interaction.user.id, {
+          // Set @everyone's permissions to read-only (deny SendMessages, allow ViewChannel + ReadMessageHistory)
+          await channel.permissionOverwrites.edit(channel.guild.roles.everyone, {
             [PermissionFlagsBits.SendMessages]: false,
             [PermissionFlagsBits.ViewChannel]: true,
             [PermissionFlagsBits.ReadMessageHistory]: true,
