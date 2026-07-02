@@ -13,7 +13,7 @@ module.exports = {
 
       // Reply to the user (only they can see this)
       await interaction.reply({
-        content: `Your chat has been created: ${channel}`,
+        content: `Your chat has been created! [Visit Chat](https://discord.com/channels/${interaction.guild.id}/${channel.id})`,
         flags: 64, // ephemeral
       });
     } catch (err) {

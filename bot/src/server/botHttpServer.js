@@ -5,11 +5,11 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  PermissionFlagsBits,
 } = require("discord.js");
-
+const { createChat } = require("../services/chatService");
 
 const startBotHttpServer = (client) => {
-
   const PORT = process.env.PORT || 3001;
 
   const app = express();
@@ -57,14 +57,18 @@ const startBotHttpServer = (client) => {
       const targetChannelId = channelId || process.env.CHANNEL_ID;
 
       console.log("Bot received command to send message to channel.");
-      
+
       const channel = await client.channels.fetch(targetChannelId);
       if (!channel) {
         throw new Error("Channel not found.");
       }
-      
+
       const sentMsg = await channel.send(message);
-      res.json({ status: "success", message: "Message sent successfully", messageId: sentMsg.id });
+      res.json({
+        status: "success",
+        message: "Message sent successfully",
+        messageId: sentMsg.id,
+      });
     } catch (err) {
       console.error("Error sending message to Discord:", err.message);
       res.status(500).json({ error: err.message });
@@ -100,6 +104,70 @@ const startBotHttpServer = (client) => {
     }
   });
 
+  // Returns the last 50 messages of a channel for history synchronization
+  app.get("/channels/:channelId/messages", async (req, res) => {
+    const { channelId } = req.params;
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+      if (channel.type !== ChannelType.GuildText) {
+        return res.status(400).json({ error: "Channel is not a text channel" });
+      }
+
+      const fetched = await channel.messages.fetch({ limit: 50 });
+      const messages = fetched
+        .map((msg) => {
+          let author = msg.author.username;
+          let isOwn = false;
+
+          if (msg.author.id === client.user.id) {
+            const isSystem = msg.embeds.length > 0 || 
+                             (msg.content && msg.content.startsWith("Your chat has been created:")) ||
+                             (msg.content && msg.content.startsWith("This ticket has been closed by"));
+            if (isSystem) {
+              isOwn = false;
+              author = "System";
+            } else {
+              isOwn = true;
+              author = "Admin";
+            }
+          }
+
+          let content = msg.content || "";
+          if (!content && msg.embeds.length > 0) {
+            const emb = msg.embeds[0];
+            content = `${emb.title ? `**${emb.title}**\n` : ""}${emb.description || ""}`;
+          }
+
+          return {
+            author,
+            content,
+            channelId: channel.id,
+            channelName: channel.name,
+            messageId: msg.id,
+            timestamp: msg.createdAt,
+            isOwn,
+            embed: msg.embeds.length > 0 ? {
+              title: msg.embeds[0].title,
+              description: msg.embeds[0].description,
+              color: msg.embeds[0].hexColor || "#5865f2"
+            } : null,
+          };
+        })
+        .reverse(); // Order from oldest to newest
+
+      res.json({ messages });
+    } catch (err) {
+      console.error(
+        `Error fetching history for channel ${channelId}:`,
+        err.message,
+      );
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Creates and sends an embed with a "Start Chat" button to a channel
   app.post("/post-embed", async (req, res) => {
     const { channelId, title, description, color } = req.body;
@@ -113,7 +181,9 @@ const startBotHttpServer = (client) => {
       // Build the embed from admin-provided fields
       const embed = new EmbedBuilder()
         .setTitle(title || "Support")
-        .setDescription(description || "Click the button below to start a chat.")
+        .setDescription(
+          description || "Click the button below to start a chat.",
+        )
         .setColor(color ? parseInt(color.replace("#", ""), 16) : 0x5865f2)
         .setTimestamp();
 
@@ -123,7 +193,7 @@ const startBotHttpServer = (client) => {
           .setCustomId("start-chat")
           .setLabel("Start Chat")
           .setStyle(ButtonStyle.Primary)
-          .setEmoji("💬")
+          .setEmoji("💬"),
       );
 
       const sentMsg = await channel.send({
@@ -161,6 +231,103 @@ const startBotHttpServer = (client) => {
       res.json({ status: "success" });
     } catch (err) {
       console.error("Error deleting embed:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Set channel permissions to read-only (Close Ticket)
+  app.post("/channels/:channelId/close", async (req, res) => {
+    const { channelId } = req.params;
+    const { source } = req.body || {};
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+
+      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, {
+        [PermissionFlagsBits.SendMessages]: false,
+        [PermissionFlagsBits.ViewChannel]: true,
+        [PermissionFlagsBits.ReadMessageHistory]: true,
+      });
+
+      // Find the welcome message and disable the "Close Ticket" button
+      try {
+        const messages = await channel.messages.fetch({ limit: 50 });
+        const welcomeMsg = messages.find(m => 
+          m.components && m.components.some(row => 
+            row.components.some(comp => comp.customId === "close-ticket")
+          )
+        );
+
+        if (welcomeMsg) {
+          const updatedComponents = welcomeMsg.components.map(row => {
+            const newRow = ActionRowBuilder.from(row);
+            newRow.components.forEach(comp => {
+              if (comp.data.custom_id === "close-ticket") {
+                comp.setDisabled(true);
+              }
+            });
+            return newRow;
+          });
+          await welcomeMsg.edit({ components: updatedComponents });
+        }
+      } catch (buttonErr) {
+        console.error(`Failed to disable button in channel ${channelId}:`, buttonErr.message);
+      }
+
+      if (source !== "discord") {
+        await channel.send("This ticket has been closed by Admin. The channel is now read-only.");
+      }
+
+      res.json({ status: "success" });
+    } catch (err) {
+      console.error(`Error closing channel ${channelId}:`, err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Creates a support chat for a user on behalf of the Admin panel
+  app.post("/create-chat-from-admin", async (req, res) => {
+    const { userId, embedMessageId, embedChannelId } = req.body;
+    try {
+      const guild = await client.guilds.fetch(process.env.GUILD_ID);
+      if (!guild) {
+        return res.status(404).json({ error: "Guild not found" });
+      }
+
+      const user = await client.users.fetch(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const channel = await createChat(guild, user, embedMessageId);
+
+      // If created successfully and embed message info is supplied, update Discord embed button to Visit Chat
+      if (embedMessageId && embedChannelId) {
+        try {
+          const embedChan = await client.channels.fetch(embedChannelId);
+          if (embedChan) {
+            const embedMsg = await embedChan.messages.fetch(embedMessageId);
+            if (embedMsg) {
+              const visitRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setLabel("Visit Chat")
+                  .setStyle(ButtonStyle.Link)
+                  .setURL(`https://discord.com/channels/${guild.id}/${channel.id}`)
+                  .setEmoji("💬")
+              );
+              await embedMsg.edit({ components: [visitRow] });
+            }
+          }
+        } catch (editEmbedErr) {
+          console.error("Failed to edit original embed message button on Discord:", editEmbedErr.message);
+        }
+      }
+
+      res.json({ status: "success", channelId: channel.id, channelName: channel.name });
+    } catch (err) {
+      console.error("Error creating chat from admin:", err.message);
       res.status(500).json({ error: err.message });
     }
   });

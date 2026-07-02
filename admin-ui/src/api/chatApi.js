@@ -9,9 +9,15 @@ export const fetchChats = async () => {
 };
 
 // Fetch messages for a specific chat channel.
-export const fetchChatMessages = async (channelName) => {
+export const fetchChatMessages = async (channelId) => {
   const response = await axiosInstance.get(
-    `/admin/chats/${channelName}/messages`
+    `/admin/chats/${channelId}/messages`,
   );
-  return response.data.messages;
+  return response.data;
+};
+
+// Close a support ticket chat
+export const closeChat = async (channelId) => {
+  const response = await axiosInstance.patch(`/admin/chats/${channelId}/close`);
+  return response.data;
 };

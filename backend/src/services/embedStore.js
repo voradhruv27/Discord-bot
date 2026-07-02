@@ -6,13 +6,15 @@ const embeds = {};
 let embedCounter = 0;
 
 // Save a new embed record and return the generated ID
-const addEmbed = (channelId, messageId, title, description, color) => {
+const addEmbed = (channelId, messageId, title, description, color, channelName) => {
   embedCounter += 1;
   const id = `embed-${embedCounter}`;
 
   embeds[id] = {
+    embedId: id,
     id,
     channelId,
+    channelName: channelName || `channel-${channelId}`,
     messageId,
     title,
     description,

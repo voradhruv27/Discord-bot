@@ -6,6 +6,7 @@ const forwardMessageToBackend = async (
   channelId,
   channelName,
   messageId,
+  embed,
 ) => {
   try {
     await axios.post(`${process.env.BACKEND_URL}/api/receive`, {
@@ -14,17 +15,20 @@ const forwardMessageToBackend = async (
       channelId,
       channelName,
       messageId,
+      embed,
     });
   } catch (err) {
     console.error("Failed to forward message to backend:", err.message);
   }
 };
 
-const notifyChannelCreatedToBackend = async (channelName, channelId) => {
+const notifyChannelCreatedToBackend = async (channelName, channelId, welcomeEmbed, embedMessageId) => {
   try {
     await axios.post(`${process.env.BACKEND_URL}/api/admin/channels/created`, {
       channelName,
       channelId,
+      welcomeEmbed,
+      embedMessageId,
     });
   } catch (err) {
     console.error("Failed to notify backend of channel creation:", err.message);
@@ -55,7 +59,10 @@ const notifyMessageDeletedToBackend = async (channelName, messageId) => {
 
 const notifyChatClosedToBackend = async (channelId) => {
   try {
-    await axios.patch(`${process.env.BACKEND_URL}/api/admin/chats/${channelId}/close`);
+    await axios.patch(
+      `${process.env.BACKEND_URL}/api/admin/chats/${channelId}/close`,
+      { source: "discord" }
+    );
   } catch (err) {
     console.error("Failed to notify backend of chat closure:", err.message);
   }

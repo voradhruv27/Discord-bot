@@ -48,6 +48,10 @@
   --color-warning-600: #d97706;
 }
 
+@utility section-container {
+  @apply flex flex-col h-full bg-surface-900 border border-white/[0.08] rounded-2xl overflow-hidden mx-16;
+}
+
 /* ─── Base styles ─────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;

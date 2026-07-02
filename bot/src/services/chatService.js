@@ -9,7 +9,7 @@ const { notifyChannelCreatedToBackend } = require("./backendService");
 
 let chatCounter = 0;
 
-const createChat = async (guild, user) => {
+const createChat = async (guild, user, embedMessageId) => {
   chatCounter += 1;
   const channelName = `chat-${chatCounter}`;
 
@@ -27,7 +27,7 @@ const createChat = async (guild, user) => {
     .setDescription(
       `Welcome, ${user.username}!\n\n` +
         "Please describe your issue below.\n\n" +
-        "When your issue is resolved, click **Close Ticket** to close this channel."
+        "When your issue is resolved, click **Close Ticket** to close this channel.",
     )
     .setColor(0x5865f2) // Discord blurple
     .setTimestamp();
@@ -38,7 +38,7 @@ const createChat = async (guild, user) => {
       .setCustomId("close-ticket") // we read this ID in interactionCreate.js
       .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger) // red button
-      .setEmoji("🔒")
+      .setEmoji("🔒"),
   );
 
   // Send the welcome embed + button into the new channel
@@ -47,8 +47,17 @@ const createChat = async (guild, user) => {
     components: [closeButton],
   });
 
+  const welcomeEmbedData = {
+    title: "Support Ticket Opened",
+    description:
+      `Welcome, ${user.username}!\n\n` +
+      "Please describe your issue below.\n\n" +
+      "When your issue is resolved, click **Close Ticket** to close this channel.",
+    color: "#5865f2",
+  };
+
   // Notify the backend that a new channel was created
-  await notifyChannelCreatedToBackend(channelName, channel.id);
+  await notifyChannelCreatedToBackend(channelName, channel.id, welcomeEmbedData, embedMessageId);
 
   return channel;
 };

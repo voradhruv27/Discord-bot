@@ -4,19 +4,55 @@ module.exports = {
   name: "messageCreate",
   once: false,
   async execute(message) {
-    if (message.author.bot) return; // Ignore messages from bots
+    // Check if it's an admin message sent from the Admin UI via the bot client
+    const isOwnAdmin = message.author.id === message.client.user.id && 
+                      message.embeds.length === 0 && 
+                      !(message.content && message.content.startsWith("Your chat has been created:")) &&
+                      !(message.content && message.content.startsWith("This ticket has been closed by"));
 
-    if (!message.channel.name.startsWith("chat-")) return; //Only forward messages from chat channels (chat-1, chat-2, etc.)
+    if (isOwnAdmin) {
+      // Ignore admin text replies from the bot because the Admin UI already appends them locally
+      return;
+    }
+
+    let author = message.author.username;
+    let content = message.content || "";
+
+    // If it's a message from the bot itself (system notice or embed card)
+    if (message.author.id === message.client.user.id) {
+      author = "System";
+      if (!content && message.embeds.length > 0) {
+        const emb = message.embeds[0];
+        content = `${emb.title ? `**${emb.title}**\n` : ""}${emb.description || ""}`;
+      }
+    } else if (message.author.bot) {
+      // If it's another bot (not ours), we can still display it
+      if (!content && message.embeds.length > 0) {
+        const emb = message.embeds[0];
+        content = `${emb.title ? `**${emb.title}**\n` : ""}${emb.description || ""}`;
+      }
+    }
+
+    let embed = null;
+    if (message.embeds.length > 0) {
+      embed = {
+        title: message.embeds[0].title,
+        description: message.embeds[0].description,
+        color: message.embeds[0].hexColor || "#5865f2"
+      };
+    }
 
     console.log(
-      `[${message.channel.name}] ${message.author.username}: "${message.content}"`,
+      `[${message.channel.name}] ${author}: "${content}"`
     );
+
     await forwardMessageToBackend(
-      message.author.username,
-      message.content,
+      author,
+      content,
       message.channel.id,
       message.channel.name,
-      message.id
+      message.id,
+      embed
     );
   },
 };

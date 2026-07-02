@@ -3,7 +3,7 @@ const { broadcast } = require("../services/websocketService");
 const { addMessage } = require("../services/chatStore");
 
 const receiveMessage = (req, res) => {
-  const { author, content, channelId, channelName, messageId } = req.body;
+  const { author, content, channelId, channelName, messageId, embed } = req.body;
   console.log(`[${channelName}] Received from Discord (${author}): "${content}"`);
   
   // Build a message object
@@ -14,6 +14,7 @@ const receiveMessage = (req, res) => {
     channelName,
     messageId,
     timestamp: new Date(),
+    embed,
   };
 
   // Store in our chat store

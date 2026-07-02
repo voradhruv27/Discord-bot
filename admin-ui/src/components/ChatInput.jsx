@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import axiosInstance from "../api/axiosInstance";
 
-export default function ChatInput({ selectedChat, channelId, onMessageSent }) {
+export default function ChatInput({ selectedChat, channelId, onMessageSent, isClosed }) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const textareaRef = useRef(null);
@@ -11,8 +11,8 @@ export default function ChatInput({ selectedChat, channelId, onMessageSent }) {
     e.preventDefault();
     const text = input.trim();
 
-    // Do not send if input is empty, sending is in progress, or we don't have a channel ID
-    if (!text || isSending || !channelId) return;
+    // Do not send if input is empty, sending is in progress, no channel ID, or channel is closed
+    if (!text || isSending || !channelId || isClosed) return;
 
     setIsSending(true);
     try {
@@ -60,17 +60,25 @@ export default function ChatInput({ selectedChat, channelId, onMessageSent }) {
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
-          channelId ? "Type a message…" : "Waiting for channel details…"
+          isClosed
+            ? "🔒 This ticket has been closed and is read-only."
+            : channelId
+            ? "Type a message…"
+            : "Waiting for channel details…"
         }
         rows={1}
-        disabled={isSending || !channelId}
-        className="flex-1 resize-none bg-surface-800 border border-white/[0.09] rounded-xl px-3.5 py-2.5 text-slate-200 text-[13px] leading-relaxed outline-none max-h-24 overflow-y-auto placeholder-slate-600 focus:border-primary-500/50 transition-colors font-[inherit]"
+        disabled={isSending || !channelId || isClosed}
+        className={`flex-1 resize-none border rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed outline-none max-h-24 overflow-y-auto placeholder-slate-600 transition-colors font-[inherit] ${
+          isClosed
+            ? "bg-surface-900/50 border-white/[0.04] text-slate-500 cursor-not-allowed opacity-60"
+            : "bg-surface-800 border-white/[0.09] text-slate-200 focus:border-primary-500/50"
+        }`}
       />
       <button
         type="submit"
-        disabled={!input.trim() || isSending || !channelId}
+        disabled={!input.trim() || isSending || !channelId || isClosed}
         className={`w-10 h-10 rounded-xl border border-white/[0.09] flex items-center justify-center flex-shrink-0 transition-colors ${
-          input.trim() && !isSending && channelId
+          input.trim() && !isSending && channelId && !isClosed
             ? "bg-primary-600 text-white cursor-pointer hover:bg-primary-500"
             : "bg-surface-800 text-slate-600 cursor-not-allowed"
         }`}
