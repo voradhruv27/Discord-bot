@@ -1,37 +1,41 @@
 const { sendMessageToBot } = require("../services/botService");
 const { broadcast } = require("../services/websocketService");
-const { addMessage } = require("../services/chatStore");
+const { addMessage } = require("../store/chatStore");
 
-const receiveMessage = (req, res) => {
+const receiveMessage = async (req, res) => {
   const { author, content, channelId, channelName, messageId, embed } = req.body;
   console.log(`[${channelName}] Received from Discord (${author}): "${content}"`);
-  
-  // Build a message object
-  const message = {
-    author,
-    content,
-    channelId,
-    channelName,
-    messageId,
-    timestamp: new Date(),
-    embed,
-  };
 
-  // Store in our chat store
-  addMessage(channelName, message);
+  try {
+    // Build a message object
+    const message = {
+      author,
+      content,
+      channelId,
+      channelName,
+      messageId,
+      timestamp: new Date(),
+      embed,
+    };
 
-  // Broadcast to all UI clients via WebSocket
-  broadcast({
-    type: "new_message",
-    payload: message,
-  });
+    // Store in PostgreSQL
+    await addMessage(channelName, message);
 
-  res.json({ status: "received", message: content });
+    // Broadcast to all UI clients via WebSocket
+    broadcast({
+      type: "new_message",
+      payload: message,
+    });
+
+    res.json({ status: "received", message: content });
+  } catch (err) {
+    console.error("Failed to receive message:", err.message);
+    res.status(500).json({ error: "Failed to store message" });
+  }
 };
 
-
 // Sends a message to a Discord channel by calling the bot HTTP server.
- 
+
 const sendMessage = async (req, res, next) => {
   const { message, channelId, channelName } = req.body;
 
@@ -39,9 +43,9 @@ const sendMessage = async (req, res, next) => {
     const result = await sendMessageToBot(message, channelId);
     const messageId = result.messageId || null;
 
-    // Persist Admin message in-memory so it is saved in chat history
+    // Persist Admin message in PostgreSQL
     if (channelName) {
-      addMessage(channelName, {
+      await addMessage(channelName, {
         author: "Admin",
         content: message,
         channelId,

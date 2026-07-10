@@ -5,8 +5,8 @@ const {
   getEmbed,
   updateEmbedMessageId,
   deleteEmbed: deleteEmbedRecord,
-} = require("../services/embedStore");
-const { getChatStatus } = require("../services/chatStore");
+} = require("../store/embedStore");
+const { getChatStatus } = require("../store/chatStore");
 
 const BOT_URL = process.env.BOT_SERVER_URL || "http://localhost:3001";
 
@@ -15,12 +15,15 @@ const getChannels = async (req, res) => {
   try {
     const response = await axios.get(`${BOT_URL}/channels`);
     const botChannels = response.data.channels || [];
-    
-    // Map in-memory open/closed status onto support chats
-    const channelsWithStatus = botChannels.map((channel) => ({
-      ...channel,
-      status: channel.name.startsWith("chat-") ? getChatStatus(channel.name) : null,
-    }));
+
+    // getChatStatus is now async, so we loop instead of .map()
+    const channelsWithStatus = [];
+    for (const channel of botChannels) {
+      const status = channel.name.startsWith("chat-")
+        ? await getChatStatus(channel.name)
+        : null;
+      channelsWithStatus.push({ ...channel, status });
+    }
 
     res.json({ channels: channelsWithStatus });
   } catch (err) {
@@ -43,8 +46,8 @@ const createEmbed = async (req, res) => {
 
     const { messageId } = response.data;
 
-    // Save the embed record in our in-memory store
-    const embed = addEmbed(channelId, messageId, title, description, color, channelName);
+    // Save the embed record in PostgreSQL
+    const embed = await addEmbed(channelId, messageId, title, description, color, channelName);
 
     res.json({ status: "success", embed });
   } catch (err) {
@@ -54,16 +57,21 @@ const createEmbed = async (req, res) => {
 };
 
 // Return all saved embeds
-const getEmbeds = (req, res) => {
-  const embeds = getAllEmbeds();
-  res.json({ embeds });
+const getEmbeds = async (req, res) => {
+  try {
+    const embeds = await getAllEmbeds();
+    res.json({ embeds });
+  } catch (err) {
+    console.error("Failed to get embeds:", err.message);
+    res.status(500).json({ error: "Failed to get embeds" });
+  }
 };
 
 // Delete an embed from Discord and remove the record
 const deleteEmbedHandler = async (req, res) => {
   const { embedId } = req.params;
 
-  const embed = getEmbed(embedId);
+  const embed = await getEmbed(embedId);
   if (!embed) {
     return res.status(404).json({ error: "Embed not found" });
   }
@@ -77,7 +85,7 @@ const deleteEmbedHandler = async (req, res) => {
   }
 
   // Remove the record from our store either way
-  deleteEmbedRecord(embedId);
+  await deleteEmbedRecord(embedId);
 
   res.json({ status: "success" });
 };
@@ -86,7 +94,7 @@ const deleteEmbedHandler = async (req, res) => {
 const repostEmbed = async (req, res) => {
   const { embedId } = req.params;
 
-  const embed = getEmbed(embedId);
+  const embed = await getEmbed(embedId);
   if (!embed) {
     return res.status(404).json({ error: "Embed not found" });
   }
@@ -102,10 +110,10 @@ const repostEmbed = async (req, res) => {
     const { messageId } = response.data;
 
     // Update the record with the new message ID
-    updateEmbedMessageId(embedId, messageId);
+    await updateEmbedMessageId(embedId, messageId);
 
     // Retrieve and return the updated embed
-    const updatedEmbed = getEmbed(embedId);
+    const updatedEmbed = await getEmbed(embedId);
     res.json({ status: "success", embed: updatedEmbed });
   } catch (err) {
     console.error("Failed to repost embed:", err.message);

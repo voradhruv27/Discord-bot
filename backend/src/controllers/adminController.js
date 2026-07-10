@@ -13,8 +13,8 @@ const {
   linkEmbedToChat,
   getChatByEmbed,
   unlinkEmbedByChat,
-} = require("../services/chatStore");
-const { getEmbed, getAllEmbeds } = require("../services/embedStore");
+} = require("../store/chatStore");
+const { getAllEmbeds } = require("../store/embedStore");
 
 const getAdminStats = (req, res) => {
   res.json({
@@ -30,20 +30,35 @@ const getChats = async (req, res) => {
     const botUrl = process.env.BOT_SERVER_URL || "http://localhost:3001";
     const response = await axios.get(`${botUrl}/active-chats`);
     const botChats = response.data.chats || [];
-    const chatsWithStatus = botChats.map((chat) => ({
-      ...chat,
-      status: getChatStatus(chat.name),
-    }));
+
+    // getChatStatus is now async, so we loop instead of .map()
+    const chatsWithStatus = [];
+    for (const chat of botChats) {
+      const status = await getChatStatus(chat.name);
+      chatsWithStatus.push({ ...chat, status });
+    }
+
     res.json({ chats: chatsWithStatus });
   } catch (err) {
     console.error("Failed to fetch active chats from bot:", err.message);
-    // Fallback to locally stored chats in-memory if bot is offline
-    const chats = getAllChats().map((name) => ({
-      name,
-      id: getMessages(name)[0]?.channelId || null,
-      status: getChatStatus(name),
-    }));
-    res.json({ chats });
+    // Fallback to locally stored chats if bot is offline
+    try {
+      const chatNames = await getAllChats();
+      const chats = [];
+      for (const name of chatNames) {
+        const msgs = await getMessages(name);
+        const status = await getChatStatus(name);
+        chats.push({
+          name,
+          id: msgs[0]?.channelId || null,
+          status,
+        });
+      }
+      res.json({ chats });
+    } catch (fallbackErr) {
+      console.error("Fallback also failed:", fallbackErr.message);
+      res.json({ chats: [] });
+    }
   }
 };
 
@@ -57,31 +72,39 @@ const getChatMessages = async (req, res) => {
       `${botUrl}/channels/${channelId}/messages`,
     );
 
-    // Find channelName to retrieve the welcome embed from our chatStore
-    const allChatNames = getAllChats();
-    const channelName = allChatNames.find((name) => {
-      const msgs = getMessages(name);
-      return msgs.some((msg) => msg.channelId === channelId);
-    });
+    // Find channelName to retrieve the welcome embed from our store
+    const allChatNames = await getAllChats();
+    let channelName = null;
+    for (const name of allChatNames) {
+      const msgs = await getMessages(name);
+      if (msgs.some((msg) => msg.channelId === channelId)) {
+        channelName = name;
+        break;
+      }
+    }
 
     let welcomeEmbed = null;
     if (channelName) {
-      welcomeEmbed = getWelcomeEmbed(channelName);
+      welcomeEmbed = await getWelcomeEmbed(channelName);
     } else {
       // Fallback: try to resolve channelName from active chats
       try {
         const activeResponse = await axios.get(`${botUrl}/active-chats`);
         const match = activeResponse.data.chats.find(c => c.id === channelId);
         if (match) {
-          welcomeEmbed = getWelcomeEmbed(match.name);
+          welcomeEmbed = await getWelcomeEmbed(match.name);
         }
       } catch (e) {}
     }
 
-    const mappedMessages = (response.data.messages || []).map(msg => {
-      const activeChatChannelId = getChatByEmbed(msg.messageId);
-      return { ...msg, activeChatChannelId };
-    });
+    // getChatByEmbed is now async — use Promise.all for parallel lookups
+    const rawMessages = response.data.messages || [];
+    const mappedMessages = await Promise.all(
+      rawMessages.map(async (msg) => {
+        const activeChatChannelId = await getChatByEmbed(msg.messageId);
+        return { ...msg, activeChatChannelId };
+      }),
+    );
 
     res.json({
       messages: mappedMessages,
@@ -95,62 +118,77 @@ const getChatMessages = async (req, res) => {
 
 // Handles notification from Bot that a new channel was created and broadcasts to websocket clients
 const { broadcast } = require("../services/websocketService");
-const notifyChannelCreated = (req, res) => {
+const notifyChannelCreated = async (req, res) => {
   const { channelName, channelId, welcomeEmbed, embedMessageId } = req.body;
 
-  if (embedMessageId) {
-    linkEmbedToChat(embedMessageId, channelId);
+  try {
+    if (embedMessageId) {
+      await linkEmbedToChat(embedMessageId, channelId);
+    }
+
+    if (welcomeEmbed) {
+      await setWelcomeEmbed(channelName, welcomeEmbed);
+    }
+
+    broadcast({
+      type: "channel_created",
+      payload: {
+        name: channelName,
+        id: channelId,
+        welcomeEmbed,
+      },
+    });
+
+    res.json({ status: "success" });
+  } catch (err) {
+    console.error("Failed to handle channel created:", err.message);
+    res.status(500).json({ error: "Failed to handle channel created" });
   }
-
-  if (welcomeEmbed) {
-    setWelcomeEmbed(channelName, welcomeEmbed);
-  }
-
-  broadcast({
-    type: "channel_created",
-    payload: {
-      name: channelName,
-      id: channelId,
-      welcomeEmbed,
-    },
-  });
-
-  res.json({ status: "success" });
 };
 
 // Handles notification from Bot that a channel was deleted
-const notifyChannelDeleted = (req, res) => {
+const notifyChannelDeleted = async (req, res) => {
   const { channelName, channelId } = req.body;
 
-  deleteChat(channelName);
-  unlinkEmbedByChat(channelId);
+  try {
+    await deleteChat(channelName);
+    await unlinkEmbedByChat(channelId);
 
-  broadcast({
-    type: "channel_deleted",
-    payload: {
-      name: channelName,
-      id: channelId,
-    },
-  });
+    broadcast({
+      type: "channel_deleted",
+      payload: {
+        name: channelName,
+        id: channelId,
+      },
+    });
 
-  res.json({ status: "success" });
+    res.json({ status: "success" });
+  } catch (err) {
+    console.error("Failed to handle channel deleted:", err.message);
+    res.status(500).json({ error: "Failed to handle channel deleted" });
+  }
 };
 
 // Handles notification from Bot that a message was deleted
-const notifyMessageDeleted = (req, res) => {
+const notifyMessageDeleted = async (req, res) => {
   const { channelName, messageId } = req.body;
 
-  deleteMessage(channelName, messageId);
+  try {
+    await deleteMessage(channelName, messageId);
 
-  broadcast({
-    type: "message_deleted",
-    payload: {
-      channelName,
-      messageId,
-    },
-  });
+    broadcast({
+      type: "message_deleted",
+      payload: {
+        channelName,
+        messageId,
+      },
+    });
 
-  res.json({ status: "success" });
+    res.json({ status: "success" });
+  } catch (err) {
+    console.error("Failed to handle message deleted:", err.message);
+    res.status(500).json({ error: "Failed to handle message deleted" });
+  }
 };
 
 // Handles Close Ticket action from Admin UI (or notification from Bot)
@@ -164,11 +202,15 @@ const closeChatByChannel = async (req, res) => {
     await axios.post(`${botUrl}/channels/${channelId}/close`, { source });
 
     // Find channel name by channelId from stored messages or active chats
-    const allChatNames = getAllChats();
-    let channelName = allChatNames.find((name) => {
-      const msgs = getMessages(name);
-      return msgs.some((msg) => msg.channelId === channelId);
-    });
+    const allChatNames = await getAllChats();
+    let channelName = null;
+    for (const name of allChatNames) {
+      const msgs = await getMessages(name);
+      if (msgs.some((msg) => msg.channelId === channelId)) {
+        channelName = name;
+        break;
+      }
+    }
 
     if (!channelName) {
       try {
@@ -179,7 +221,7 @@ const closeChatByChannel = async (req, res) => {
     }
 
     if (channelName) {
-      setChatStatus(channelName, "closed");
+      await setChatStatus(channelName, "closed");
     }
 
     broadcast({
@@ -200,24 +242,25 @@ const createChatFromAdmin = async (req, res) => {
 
   try {
     const botUrl = process.env.BOT_SERVER_URL || "http://localhost:3001";
-    
+
     let embedChannelId = null;
     if (embedMessageId) {
-      const embedRecord = getAllEmbeds().find(emb => emb.messageId === embedMessageId);
+      const allEmbeds = await getAllEmbeds();
+      const embedRecord = allEmbeds.find(emb => emb.messageId === embedMessageId);
       if (embedRecord) {
         embedChannelId = embedRecord.channelId;
       }
     }
 
-    const response = await axios.post(`${botUrl}/create-chat-from-admin`, { 
-      userId, 
-      embedMessageId, 
-      embedChannelId 
+    const response = await axios.post(`${botUrl}/create-chat-from-admin`, {
+      userId,
+      embedMessageId,
+      embedChannelId,
     });
-    
+
     // If successfully created from admin side, link it in the store as well
     if (response.data && response.data.status === "success" && embedMessageId) {
-      linkEmbedToChat(embedMessageId, response.data.channelId);
+      await linkEmbedToChat(embedMessageId, response.data.channelId);
     }
 
     res.json(response.data);
