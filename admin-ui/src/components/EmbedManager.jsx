@@ -74,10 +74,13 @@ export default function EmbedManager({ selectedChannel, channels }) {
 
   // Sync selection with sidebar selected channel
   useEffect(() => {
-    if (selectedChannel) {
+    if (selectedChannel && !selectedChannel.name.startsWith("chat-")) {
       setSelectedChannelId(selectedChannel.id);
-    } else if (channels.length > 0 && !selectedChannelId) {
-      setSelectedChannelId(channels[0].id);
+    } else if (!selectedChannelId || (selectedChannel && selectedChannel.name.startsWith("chat-"))) {
+      const firstServerChannel = channels.find((ch) => !ch.name.startsWith("chat-"));
+      if (firstServerChannel) {
+        setSelectedChannelId(firstServerChannel.id);
+      }
     }
   }, [selectedChannel, channels]);
 
@@ -192,11 +195,13 @@ export default function EmbedManager({ selectedChannel, channels }) {
               {channels.length === 0 ? (
                 <option>No text channels found</option>
               ) : (
-                channels.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    #{ch.name} {ch.parentName ? `(${ch.parentName})` : ""}
-                  </option>
-                ))
+                channels
+                  .filter((ch) => !ch.name.startsWith("chat-"))
+                  .map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      #{ch.name} {ch.parentName ? `(${ch.parentName})` : ""}
+                    </option>
+                  ))
               )}
             </select>
           </div>

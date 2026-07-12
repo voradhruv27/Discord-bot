@@ -1,7 +1,7 @@
 const formatTime = (ts) =>
   new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-export default function MessageCard({ msg, onStartChat, onVisitChat }) {
+export default function MessageCard({ msg, onStartChat, isStartingChat, onVisitChat }) {
   if (msg.embed) {
     return (
       <div className="flex gap-3 max-w-[85%] mr-auto items-end mb-3 select-none">
@@ -39,9 +39,10 @@ export default function MessageCard({ msg, onStartChat, onVisitChat }) {
               onStartChat && (
                 <button
                   onClick={onStartChat}
-                  className="mt-1 self-start py-1 px-2.5 bg-primary-600 hover:bg-primary-500 text-[10px] font-semibold text-white rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                  disabled={isStartingChat}
+                  className={`mt-1 self-start py-1 px-2.5 text-[10px] font-semibold text-white rounded-md transition-colors flex items-center gap-1 ${isStartingChat ? "bg-primary-600/50 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-500 cursor-pointer"}`}
                 >
-                  💬 Start Chat
+                  {isStartingChat ? "⏳ Starting..." : "💬 Start Chat"}
                 </button>
               )
             )}

@@ -18,6 +18,7 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
 
   const [isStartingChat, setIsStartingChat] = useState(false);
+  const [isClosingTicket, setIsClosingTicket] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -96,6 +97,8 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
   }, [selectedChat.id]);
 
   const handleCloseTicket = async () => {
+    if (isClosingTicket) return;
+    setIsClosingTicket(true);
     try {
       await closeChat(selectedChat.id);
     } catch (err) {
@@ -165,19 +168,22 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
           </span>
         </div>
 
-        {/* Close Ticket or Closed Badge */}
-        {selectedChat.status === "closed" ? (
-          <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider scale-90 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            🔴 Ticket Closed
-          </span>
-        ) : (
-          <button
-            onClick={handleCloseTicket}
-            className="py-1.5 px-3 bg-red-655/15 hover:bg-red-550/25 border border-red-500/20 text-red-400 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-1"
-          >
-            🔒 Close Ticket
-          </button>
+        {/* Close Ticket or Closed Badge — only for support chats */}
+        {selectedChat.name.startsWith("chat-") && (
+          selectedChat.status === "closed" ? (
+            <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider scale-90 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              🔴 Ticket Closed
+            </span>
+          ) : (
+            <button
+              onClick={handleCloseTicket}
+              disabled={isClosingTicket}
+              className={`py-1.5 px-3 border text-xs font-semibold rounded-xl transition-all flex items-center gap-1 ${isClosingTicket ? "bg-red-500/5 border-red-500/10 text-red-400/50 cursor-not-allowed" : "bg-red-655/15 hover:bg-red-550/25 border-red-500/20 text-red-400 cursor-pointer"}`}
+            >
+              {isClosingTicket ? "⏳ Closing..." : "🔒 Close Ticket"}
+            </button>
+          )
         )}
       </div>
 
@@ -216,9 +222,10 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
                 {selectedChat.status !== "closed" && (
                   <button
                     onClick={handleCloseTicket}
-                    className="mt-1 self-start py-1 px-2 bg-red-500/10 hover:bg-red-500/20 text-[10px] font-semibold text-red-400 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                    disabled={isClosingTicket}
+                    className={`mt-1 self-start py-1 px-2 text-[10px] font-semibold text-red-400 rounded-md transition-colors flex items-center gap-1 ${isClosingTicket ? "bg-red-500/5 cursor-not-allowed opacity-50" : "bg-red-500/10 hover:bg-red-500/20 cursor-pointer"}`}
                   >
-                    🔒 Close Ticket
+                    {isClosingTicket ? "⏳ Closing..." : "🔒 Close Ticket"}
                   </button>
                 )}
               </div>
@@ -239,6 +246,7 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
                     key={idx}
                     msg={msg}
                     onStartChat={!selectedChat.name.startsWith("chat-") ? () => handleStartChatDirect(msg.messageId) : null}
+                    isStartingChat={isStartingChat}
                     onVisitChat={handleVisitChat}
                   />
                 ))
