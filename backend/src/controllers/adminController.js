@@ -136,6 +136,7 @@ const notifyChannelCreated = async (req, res) => {
         name: channelName,
         id: channelId,
         welcomeEmbed,
+        embedMessageId: embedMessageId || null,
       },
     });
 

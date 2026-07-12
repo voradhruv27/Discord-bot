@@ -129,6 +129,18 @@ export default function MessageLog({ selectedChat, channels = [], onSelectChanne
           prev.filter((msg) => msg.messageId !== payload.messageId),
         );
       }
+    } else if (event.type === "channel_created") {
+      const payload = event.payload;
+      // Update the embed message that triggered this chat so its button switches to "Visit Chat"
+      if (payload.embedMessageId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.messageId === payload.embedMessageId
+              ? { ...msg, activeChatChannelId: payload.id }
+              : msg,
+          ),
+        );
+      }
     }
   });
 
